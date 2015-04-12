@@ -14,6 +14,8 @@
 //#include <Servo.h>
 #include <ServoTimer1.h>
 
+#include <avr/wdt.h>
+
 
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -26,7 +28,9 @@ OneWire oneWire(ONE_WIRE_BUS);
 
 // Pass our oneWire reference to Dallas Temperature. 
 DallasTemperature sensors(&oneWire);
+uint32_t timestamp = 0;
 
+#define POWER_DOWN
 
 //Servo servo;
 ServoTimer1 servo;
@@ -44,6 +48,7 @@ ESP esp(&Serial, /*&debugPort,*/ 4);
 MQTT mqtt(&esp);
 
 boolean wifiConnected = false;
+boolean mqttConnectedFlag = false;
 
 void wifiCb(void* response)
 {
@@ -69,14 +74,28 @@ void wifiCb(void* response)
 void mqttConnected(void* response)
 {
   debugPort.println("Connected");
-  mqtt.subscribe("/hubacek/servo"); //or mqtt.subscribe("topic"); /*with qos = 0*/
-  mqtt.subscribe("/hubacek/led");
-  mqtt.publish("/hubacek/status", "start");
+  //mqtt.subscribe("/hubacek/servo"); //or mqtt.subscribe("topic"); /*with qos = 0*/
+  //mqtt.subscribe("/hubacek/led");
+  //mqtt.publish("/hubacek/status", "start");
+  
+  mqttConnectedFlag = true;
 
 }
 void mqttDisconnected(void* response)
 {
   debugPort.print("Disconnected!");
+  
+  mqttConnectedFlag = false;
+  
+  /*
+  #ifdef POWER_DOWN
+  esp.disable();
+  wdtlib_pwr_down(WDTO_4S);
+
+  setup();
+  #endif
+  */
+
 }
 void mqttData(void* response)
 {
@@ -107,24 +126,47 @@ void mqttData(void* response)
 }
 void mqttPublished(void* response)
 {
+  
+   debugPort.println("Published");
+   
+  if(mqttConnectedFlag == false)
+  {
+     debugPort.println("mqttConnectedFlag false returning");
+     return;
+  }
+  
+ 
+  
+  #ifdef POWER_DOWN
+  
+  
+  debugPort.println("MQTT disconnecting, powering down");
+  mqtt.disconnect();
+  
+  
+  mqttConnectedFlag = false;
+  
+  digitalWrite(13, HIGH);
+  delay(100);
+  digitalWrite(13, LOW);
 
+  esp.disable();
+  wdtlib_pwr_down(WDTO_2S);
+  
+  setup();
+
+  #endif
+  
 }
 
-// the setup routine runs once when you press reset:
-void setup() {                
-  // initialize the digital pin as an output.
-  pinMode(led, OUTPUT); 
 
-servo.attach(9);  
-//servo2.attach(8);
-
-Serial.begin(19200); 
-debugPort.begin(19200);
-
+boolean setupESP()
+{
+  
 debugPort.println("ARDUINO: esp reset start");
 
 esp.enable();
-  delay(500);
+  delay(1000);
   esp.reset();
   delay(500);
   while(!esp.ready());
@@ -132,7 +174,7 @@ esp.enable();
   debugPort.println("ARDUINO: setup mqtt client");
   if(!mqtt.begin("DVES_duino", "admin", "Isb_C4OGD4c3", 120, 1)) {
     debugPort.println("ARDUINO: fail to setup mqtt");
-    while(1);
+    return 1;
   }
   
   /*setup mqtt events */
@@ -147,6 +189,27 @@ esp.enable();
   esp.wifiConnect("Internet","heslojeheslo");
   debugPort.println("ARDUINO: system started");
    
+   return 0;
+}
+
+// the setup routine runs once when you press reset:
+void setup() {                
+  // initialize the digital pin as an output.
+  pinMode(led, OUTPUT); 
+
+servo.attach(9);  
+//servo2.attach(8);
+
+Serial.begin(19200); 
+debugPort.begin(19200);
+
+while(setupESP() == 1)
+{
+    debugPort.println("Trying reinit ESP again in 1sec...");
+    esp.disable();
+    delay(1000);
+}
+
    
    //set timer2 interrupt at 8kHz
   TCCR2A = 0;// set entire TCCR2A register to 0
@@ -163,10 +226,12 @@ esp.enable();
   
   
   sensors.begin();
+  
+  timestamp = millis();
  
 }
 
-uint32_t timestamp = 0;
+
 
 // The interrupt will blink the LED, and keep
 // track of how many times it has blinked.
@@ -222,8 +287,10 @@ void loop() {
   
   esp.process();
   
-  if(millis() - timestamp > 5000)
+  if(millis() - timestamp > 5000 && mqttConnectedFlag)
   {
+    //mqtt.disconnect();
+    
     sensors.requestTemperatures();
     float t = sensors.getTempCByIndex(0);
     
