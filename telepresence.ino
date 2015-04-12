@@ -6,9 +6,9 @@
 #include <rest.h>
 #include <ringbuf.h>
 #include <SoftwareSerial.h>
-#include <Timer.h>
 #include <ServoTimer1.h>
 #include <avr/wdt.h>
+#include <string.h>
 
 
 // EXAMPLE CONFIGURATION
@@ -285,7 +285,7 @@ void loop() {
       debugPort.print("Temp: ");
       debugPort.println(charVal);
     #else
-      strncpy(charVal, CHAR_BUFFER_SIZE, "Hello MQTT!");
+      strncpy(charVal, "Hello MQTT!", CHAR_BUFFER_SIZE);
     #endif
     
     mqtt.publish("/hubacek/temp", charVal);
