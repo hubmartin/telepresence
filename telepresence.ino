@@ -15,7 +15,7 @@
 // ---------------------------
 
 // Enable DS18B20 temperature
-//#define TEMPERATURE
+#define TEMPERATURE
 
 // Enable sleep after temperature send
 //#define POWER_DOWN
