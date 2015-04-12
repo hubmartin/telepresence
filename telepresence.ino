@@ -46,10 +46,11 @@ int led = 13;
 int pos = 0; 
 
 // Software debug serial port
-SoftwareSerial debugPort(2, 3); // RX, TX
+SoftwareSerial debugPort(3, 2); // RX, TX
 
 // Link ESP to HW USART0
 ESP esp(&Serial, /*&debugPort,*/ 4);
+
 
 // MQTT instance
 MQTT mqtt(&esp);
